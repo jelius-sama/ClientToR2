@@ -21,7 +21,7 @@ func Router() *http.ServeMux {
         // Some features are not implemented so just redirect it back to jellyfin
         // don't worry there is no infinite loop here because it doesn't go though
         // the reverse proxy and directly reaches out to the jellyfin server.
-        mediaProxy, err := util.MakeReverseProxy("http://localhost:8096")
+        mediaProxy, err := util.MakeReverseProxy("http://localhost:6969")
         if err != nil {
             logger.Panic("Failed to make reverse proxy:", err)
         }
@@ -33,19 +33,30 @@ func Router() *http.ServeMux {
 
         found, where := util.ShouldForward(r.URL.Path)
         if found {
-            logger.Okay("Caught media request:", r.URL.Path)
-
             switch where {
             case util.PathKindVideos:
+                logger.Okay("Caught video request:", r.URL.Path)
                 handler.ApplyVideosPatch(r)
                 mediaProxy.ServeHTTP(w, r)
 
             case util.PathKindStreams:
+                logger.Okay("Caught stream request:", r.URL.Path)
                 handler.ApplyStreamsPatch(r)
                 mediaProxy.ServeHTTP(w, r)
 
             case util.PathKindAudios:
+                logger.Okay("Caught audio request:", r.URL.Path)
                 handler.ApplyAudiosPatch(r)
+                mediaProxy.ServeHTTP(w, r)
+
+            case util.PathKindImage:
+                logger.Okay("Caught image request:", r.URL.Path)
+                handler.ApplyImagePatch(r)
+                mediaProxy.ServeHTTP(w, r)
+
+            case util.PathKindHLS:
+                logger.Okay("Caught HLS request:", r.URL.Path)
+                handler.ApplyHLSPatch(r)
                 mediaProxy.ServeHTTP(w, r)
 
             default:
