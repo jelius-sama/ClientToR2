@@ -4,7 +4,7 @@ A lightweight proxy that sits in front of a [Jellyfin](https://jellyfin.org) med
 
 > [!NOTE]
 > Though this application can sit in front of your jellyfin server it is recommended that you use a reverse proxy like caddy.
-> Caddy can automatically manages TLS certificates where as our application does not and only focusses on handling the media redirection.
+> Caddy can automatically manage TLS certificates, where as, our application does not and only focusses on handling the media redirection.
 
 ## Why does this exist?
 
@@ -25,6 +25,9 @@ ClientToR2 proxies all requests to Jellyfin as normal, except for media stream r
 1. The item ID is extracted from the request URL.
 2. Jellyfin's API is queried to resolve the item ID to a file path.
 3. The file path is used to construct an S3 object key.
+> [!NOTE]
+> There are certain rules to be followed if you want the by default solution to work on your setup.
+> Those rules are regarding how you setup your media file path, more will be updated in a future doc.
 4. A presigned URL is generated pointing directly to the object in R2/S3.
 5. The client is redirected (HTTP 307) to that presigned URL.
 
@@ -57,10 +60,10 @@ Jellyfin server Response│            │                   │      │
                         └──────────┼─────────────────────┘      │
                                    │ 307 Redirect               │
                                    ▼                            │
-                             R2 / S3 Bucket                     │
-                           (media bytes served                  │
-                            directly to client,                 │
-                            EC2 not involved) ──────────────────┘
+                             R2 / S3 Bucket ────────────────────┘
+                           (media bytes served
+                            directly to client,
+                            EC2 not involved)
 ```
 
 ## Tradeoffs
