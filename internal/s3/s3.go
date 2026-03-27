@@ -19,25 +19,20 @@ type S3Client struct {
 }
 
 func NewS3Client(bucket string) *S3Client {
-    secret := os.Getenv("R2_SECRET")
-    env := os.Getenv("R2_ENV")
-    accId := os.Getenv("R2_ACCOUNT_ID")
-    if secret == "" || env == "" || accId == "" {
-        logger.Panic("R2 environment variables not configured")
-    }
-
     cfg, err := config.LoadDefaultConfig(context.TODO(),
-        config.WithRegion("auto"),
-        config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(env, secret, "")),
+        config.WithRegion("ap-south-1"), // TODO: Later change to "auto" when deploying for R2
+        config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(os.Getenv("ACCESS_KEY_ID"), os.Getenv("SECRET_ACCESS_KEY"), "")),
+        config.WithUseDualStackEndpoint(aws.DualStackEndpointStateEnabled),
     )
     if err != nil {
         logger.Panic("Failed to load default S3 config")
     }
 
-    client := s3.NewFromConfig(cfg, func(o *s3.Options) {
-        o.BaseEndpoint = aws.String("https://" + accId + ".r2.cloudflarestorage.com")
-        o.UsePathStyle = true // This replaces S3ForcePathStyle
-    })
+    // client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+    //     o.BaseEndpoint = aws.String("https://" + os.Getenv("ACCOUNT_ID") + ".r2.cloudflarestorage.com")
+    //     o.UsePathStyle = true // This replaces S3ForcePathStyle
+    // })
+    client := s3.NewFromConfig(cfg)
 
     return &S3Client{
         Client: client,

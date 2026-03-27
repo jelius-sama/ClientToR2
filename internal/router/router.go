@@ -2,6 +2,7 @@ package router
 
 import (
     "ClientToR2/internal/router/handler"
+    "ClientToR2/internal/s3"
     "ClientToR2/internal/util"
     "net/http"
     "os"
@@ -14,9 +15,6 @@ func Router() *http.ServeMux {
 
     mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
         jellyfinHost := os.Getenv("JELLYFIN_HOST")
-        if jellyfinHost == "" {
-            logger.Fatal("JELLYFIN_HOST environment variable is not set")
-        }
 
         mediaProxy, err := util.MakeReverseProxy("http://localhost:6969")
         if err != nil {
@@ -29,12 +27,13 @@ func Router() *http.ServeMux {
         }
 
         found, where := util.ShouldForward(r.URL.Path)
+        s3Client := s3.NewS3Client(os.Getenv("BUCKET_NAME"))
+
         if found {
             switch where {
             case util.PathKindVideos:
                 logger.Okay("Caught video request:", r.URL.Path)
-                handler.ApplyVideosPatch(r)
-                mediaProxy.ServeHTTP(w, r)
+                handler.ApplyVideosPatch(w, r, s3Client)
 
             case util.PathKindStreams:
                 logger.Okay("Caught stream request:", r.URL.Path)
