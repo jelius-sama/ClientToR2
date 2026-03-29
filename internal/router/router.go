@@ -56,6 +56,17 @@ func Router() *http.ServeMux {
                     jellyfinProxy.ServeHTTP(w, r)
                 }
 
+            case util.PathKindMediaInfo:
+                logger.Okay("Caught media info request:", r.URL.Path)
+                originalDirector := jellyfinProxy.Director
+                jellyfinProxy.Director = func(req *http.Request) {
+                    originalDirector(req)
+                    req.Header.Del("Accept-Encoding")
+                    req.Header.Set("Accept", "application/json")
+                }
+                jellyfinProxy.ModifyResponse = handler.ApplyMediaInfoPatch
+                jellyfinProxy.ServeHTTP(w, r)
+
             case util.PathKindHLS:
                 // NOTE: This will break web version of jellyfin, Swiftfin an iOS app for jellyfin works though.
                 logger.Okay("Caught HLS request:", r.URL.Path)

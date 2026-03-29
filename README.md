@@ -71,7 +71,9 @@ Jellyfin server Response│            │                   │      │
 ### Tradeoffs that could improve
 
 **No adaptive bitrate streaming (HLS) support**
-Jellyfin uses ffmpeg to transcode media into HLS segments for clients with limited bandwidth or compatibility requirements. Since ClientToR2 redirects to the raw file on R2, transcoding is bypassed entirely. Clients that require HLS (such as the Jellyfin web client) may fall back to retrying or fail to play. A potential solution is intercepting the `/Items/{id}/PlaybackInfo` response and nudging clients toward direct stream mode, but this is not yet implemented.
+Jellyfin uses ffmpeg to transcode media into HLS segments for clients with limited bandwidth or compatibility requirements. Since ClientToR2 redirects to the raw file on R2, transcoding is bypassed entirely. Clients that require HLS (such as the Jellyfin web client) may fall back to retrying or fail to play. The implemented solution is intercepting the `/Items/{id}/PlaybackInfo` response and nudging clients toward direct stream mode.
+By intercepting the `/Items/{id}/PlaybackInfo` API to force Direct Stream mode, the proxy effectively bypasses the server's ability to transcode or decode media on behalf of the client.
+Because R2/S3 serves the file directly, your client must natively support the original media format (codec/container). If the client cannot decode the source file, playback will fail. For the best experience, it is recommended to use widely supported video formats or a high-compatibility client (see the Codec Support section below for details).
 
 **No quality selection**
 Because media is served directly from R2 as the original file, users cannot select a lower quality stream when on a slow connection. Jellyfin's quality ladder relies on real-time transcoding through the server, which this architecture intentionally bypasses.
@@ -79,7 +81,7 @@ Because media is served directly from R2 as the original file, users cannot sele
 ### TODOs
 
 **Image and audio routes not yet intercepted**
-Thumbnails, posters, and audio streams are still proxied through the VM. These are relatively small in size but could also be served directly from R2 with additional work following the same pattern as video.
+Thumbnails, posters, and audio streams are still proxied through the VM. These are relatively small in size but could also be served directly from R2 (if you store the images there, usually jellyfin stores them in it's cache folder which may need to be mounted with rclone as well) with additional work following the same pattern as video.
 
 ### Tradeoffs that are architectural constraints
 
@@ -110,3 +112,56 @@ The codebase targets R2 by default. To use AWS S3 temporarily, update `NewS3Clie
 - Change the region from `auto` to your AWS region via `AWS_REGION`
 
 Revert both changes when switching back to R2.
+
+# Codec Support
+
+ClientToR2 redirects clients directly to the raw media file in R2/S3. There is no transcoding layer — the server does not decode or re-encode video on your behalf. What is stored in your bucket is exactly what the client receives.
+
+This means playback success depends entirely on two things:
+
+1. **Your client must natively support the codec of your media.** Native apps such as Infuse or SwiftFin tend to have broad codec support. Browser-based clients are limited to what the browser can decode, which typically means H264 and VP9 but not HEVC (especially 10-bit or 12-bit profiles) or AV1 on older devices.
+
+2. **Your media should ideally be stored in a widely compatible format.** If broad client support matters to you, encode your media in H264 (High Profile, 8-bit) with AAC audio in an MP4 container. This combination plays on virtually every client without issues.
+
+If a client cannot decode your media's codec, playback will fail silently or with a generic error. There is no fallback — this is an inherent constraint of the direct-redirect architecture.
+
+---
+
+# Storage Path Requirements
+
+ClientToR2 resolves media by taking the file path that Jellyfin reports and using it directly as the S3/R2 object key. For this to work, **the directory structure visible to Jellyfin must match the directory structure in your bucket exactly**.
+
+## Example of a working setup
+
+Jellyfin Docker volume mounts:
+```yaml
+volumes:
+  - source: /mnt/media/AMVs
+    target: /AMVs
+  - source: /mnt/media/Anime
+    target: /Anime
+  - source: /mnt/media/HAnime
+    target: /HAnime
+```
+> [!NOTE]
+> `/mnt/media` is [rclone](https://github.com/rclone/rclone) mount of your R2/S3 storage bucket.
+
+Bucket structure:
+```
+your-media-bucket/
+├── AMVs/
+├── Anime/
+└── HAnime/
+```
+
+Jellyfin sees the file at `/AMVs/akane edit __ capsize.mp4`. ClientToR2 strips the leading slash and uses `AMVs/akane edit __ capsize.mp4` as the S3 object key. The bucket must have the object at that exact key.
+
+## Common mistake
+
+If your Docker target is `/Anime` but your bucket folder is named `Anime Series`, the key will not resolve and playback will fail with a 404 from S3.
+
+**The Docker target name and the bucket folder name must be identical.**
+
+## Future improvement
+
+A future release will introduce environment variables to explicitly map Jellyfin paths to S3 paths, removing this naming constraint. For now, the simplest solution is to ensure your bucket folder names match your Docker volume target names before ingesting media.

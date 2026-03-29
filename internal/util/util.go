@@ -18,6 +18,10 @@ var videoPaths = []*regexp.Regexp{
     regexp.MustCompile(`^/Videos/[^/]+/stream\.[a-zA-Z0-9]+$`),
 }
 
+var mediaInfoPath = []*regexp.Regexp{
+    regexp.MustCompile(`^/Items/[^/]+/PlaybackInfo$`),
+}
+
 /*
  * EXAMPLE:
  * /videos/877d0f74-0648-605d-91c1-7d147a9a9ff8/master.m3u8
@@ -46,6 +50,7 @@ type PathKindT = int8
 
 const (
     PathKindVideos PathKindT = iota
+    PathKindMediaInfo
     PathKindDownloads
     PathKindAudios
     PathKindImage
@@ -56,6 +61,12 @@ func ShouldForward(path string) (bool, PathKindT) {
     for _, pattern := range videoPaths {
         if pattern.MatchString(path) {
             return true, PathKindVideos
+        }
+    }
+
+    for _, pattern := range mediaInfoPath {
+        if pattern.MatchString(path) {
+            return true, PathKindMediaInfo
         }
     }
 
