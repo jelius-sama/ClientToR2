@@ -19,12 +19,20 @@ func Router() *http.ServeMux {
             logger.Panic("Failed to make reverse proxy:", err)
         }
 
+        if r.Method != http.MethodGet {
+            logger.Info("Forwarding to Jellyfin:", r.Method, r.URL.Path)
+            jellyfinProxy.ServeHTTP(w, r)
+            return
+        }
+
+        // TODO: Handle Authentication
+
         kind := util.ForwardTo(r.URL.Path)
 
         switch kind {
-        case util.PathKindVideos:
+        case util.PathKindMedia:
             s3Client := s3.NewS3Client(os.Getenv("BUCKET_NAME"))
-            logger.Okay("Caught video request:", r.URL.Path)
+            logger.Okay("Caught media request:", r.Method, r.URL.Path)
             // NOTE: If the handler encountered an error it means two things:
             //  1. Either jellyfin server has updated their API and our proxy failed to communicate.
             //  2. Or our handler function has an edge case that we are not handling well.
@@ -42,7 +50,7 @@ func Router() *http.ServeMux {
             //       successfully be able to handle the client request thereby costing us EC2 EGRESS usage.
             //       If there really was an error though, forwarding to jellyfin would handle the error
             //       for us and we do not have to care BUT it might just be costing us egress fee.
-            // FIX: In the future it would be a good idea to handle the errors in our own application so
+            // TODO: In the future it would be a good idea to handle the errors in our own application so
             //      that we don't have to rely on jellyfin, since error responses are well documented it is
             //      not really that difficult.
             if err := handler.ApplyPatch(w, r, s3Client); err != nil {
@@ -54,7 +62,7 @@ func Router() *http.ServeMux {
             }
 
         case util.PathKindMediaInfo:
-            logger.Okay("Caught media info request:", r.URL.Path)
+            logger.Okay("Caught media info request:", r.Method, r.URL.Path)
             originalDirector := jellyfinProxy.Director
             jellyfinProxy.Director = func(req *http.Request) {
                 originalDirector(req)
@@ -67,34 +75,31 @@ func Router() *http.ServeMux {
         case util.PathKindHLS:
             s3Client := s3.NewS3Client(os.Getenv("BUCKET_NAME"))
             // NOTE: This will break web version of jellyfin, Swiftfin an iOS app for jellyfin works though.
-            logger.Okay("Caught HLS request:", r.URL.Path)
+            // FIX: For the above breaking feature, we have implemented media info route interception which
+            //        influences the web client to fetch the raw stream instead of HLS everytime, though it has
+            //        it's own disadvantages, it works.
+            logger.Okay("Caught HLS request:", r.Method, r.URL.Path)
             if err := handler.ApplyPatch(w, r, s3Client); err != nil {
                 logger.TimedError(err)
                 jellyfinProxy.ServeHTTP(w, r)
             }
 
         case util.PathKindDownloads:
-            logger.Okay("Caught download request:", r.URL.Path)
+            logger.Okay("Caught download request:", r.Method, r.URL.Path)
             handler.ApplyDownloadsPatch(w, r, jellyfinProxy)
 
-        case util.PathKindAudios:
-            logger.Okay("Caught audio request:", r.URL.Path)
-            handler.ApplyAudiosPatch(r)
-            jellyfinProxy.ServeHTTP(w, r)
-
         case util.PathKindImage:
-            logger.Okay("Caught image request:", r.URL.Path)
+            logger.Okay("TODO: Caught image request:", r.Method, r.URL.Path)
             handler.ApplyImagePatch(r)
             jellyfinProxy.ServeHTTP(w, r)
 
         case util.PathKindDefault:
-            logger.Info("Forwarding to Jellyfin:", r.URL.Path)
+            logger.Info("Forwarding to Jellyfin:", r.Method, r.URL.Path)
             jellyfinProxy.ServeHTTP(w, r)
 
         default:
             logger.Panic("unreachable")
         }
-
     })
 
     return mux

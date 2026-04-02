@@ -13,9 +13,12 @@ import (
  * /Videos/877d0f740648605d91c17d147a9a9ff8/stream
  * /Videos/{id}/stream.{container}
  */
-var videoPaths = []*regexp.Regexp{
+var mediaPaths = []*regexp.Regexp{
     regexp.MustCompile(`^/Videos/[^/]+/stream$`),
     regexp.MustCompile(`^/Videos/[^/]+/stream\.[a-zA-Z0-9]+$`),
+    regexp.MustCompile(`^/Audio/[^/]+/stream$`),
+    regexp.MustCompile(`^/Audio/[^/]+/universal$`),
+    regexp.MustCompile(`^/Audio/[^/]+/stream\.[a-zA-Z0-9]+$`),
 }
 
 var mediaInfoPath = []*regexp.Regexp{
@@ -29,6 +32,9 @@ var mediaInfoPath = []*regexp.Regexp{
  * /videos/877d0f74-0648-605d-91c1-7d147a9a9ff8/hls1/main/0.mp4
  */
 var hlsPaths = []*regexp.Regexp{
+    regexp.MustCompile(`^/audio/[^/]+/master\.m3u8$`),
+    regexp.MustCompile(`^/audio/[^/]+/main\.m3u8$`),
+    regexp.MustCompile(`^/audio/[^/]+/hls[^/]+/main/-?\d+\.[a-zA-Z0-9]+$`),
     regexp.MustCompile(`^/videos/[^/]+/master\.m3u8$`),
     regexp.MustCompile(`^/videos/[^/]+/main\.m3u8$`),
     regexp.MustCompile(`^/videos/[^/]+/hls[^/]+/main/-?\d+\.[a-zA-Z0-9]+$`),
@@ -36,6 +42,17 @@ var hlsPaths = []*regexp.Regexp{
 
 // /Items/877d0f740648605d91c17d147a9a9ff8/Images/Primary
 // /Items/{itemId}/Images/{imageType}
+/* NOTE: Jellyfin does not really store images in a very accessible place
+ * it is stored in it's cache directory, we could just make the cache
+ * directory an rclone mount but that may slow things down, this is
+ * basically gonna use the same principle as the media files.
+ * Another approach is, when a request for an image comes in we serve it
+ * and then we check if that specific image exists in R2 bucket with some
+ * sort of KeyValue DB and if it doesn't exists we can store the image in
+ * our own R2 "cache" folder and then update the KV DB, this was any
+ * subsequent request with the same image request signature can be served
+ * by redirecting to R2 instead of letting the VPS handle it.
+ */
 var imagePaths = []*regexp.Regexp{}
 
 // /Items/{itemId}/Download
@@ -43,27 +60,21 @@ var downloadPaths = []*regexp.Regexp{
     regexp.MustCompile(`^/Items/[^/]+/Download$`),
 }
 
-// /Audio/{itemId}/hls/...
-// /Audio/{itemId}/stream.{container}
-// /Audio/{itemId}/stream
-var audioPaths = []*regexp.Regexp{}
-
 type PathKindT = uint8
 
 const (
-    PathKindVideos PathKindT = iota
+    PathKindMedia PathKindT = iota
     PathKindMediaInfo
     PathKindDownloads
-    PathKindAudios
     PathKindImage
     PathKindHLS
     PathKindDefault
 )
 
 func ForwardTo(path string) PathKindT {
-    for _, pattern := range videoPaths {
+    for _, pattern := range mediaPaths {
         if pattern.MatchString(path) {
-            return PathKindVideos
+            return PathKindMedia
         }
     }
 
@@ -76,12 +87,6 @@ func ForwardTo(path string) PathKindT {
     for _, pattern := range downloadPaths {
         if pattern.MatchString(path) {
             return PathKindDownloads
-        }
-    }
-
-    for _, pattern := range audioPaths {
-        if pattern.MatchString(path) {
-            return PathKindAudios
         }
     }
 

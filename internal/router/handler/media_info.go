@@ -16,6 +16,7 @@ func ApplyMediaInfoPatch(resp *http.Response) error {
 
     // Jellyfin may send compressed responses depending on the client's Accept-Encoding header.
     var bodyReader io.Reader = resp.Body
+    // NOTE: We don't really need this part anymore
     if resp.Header.Get("Content-Encoding") == "gzip" {
         gzReader, err := gzip.NewReader(resp.Body)
         if err != nil {
