@@ -5,7 +5,9 @@ import (
     "crypto"
     "errors"
     "fmt"
+    "net/url"
     "os"
+    "strings"
     "time"
 
     "github.com/aws/aws-sdk-go-v2/aws"
@@ -93,11 +95,25 @@ func (s3Client *S3Client) CreateSignedURL(ctx context.Context, objectKey string,
 
     // Cloudfront mode
     if endpoint := os.Getenv("CLOUDFRONT_ENDPOINT"); len(endpoint) != 0 {
-        cloudfrontResourceURL := "https://" + endpoint + "/" + objectKey + "?response-content-disposition=" + disposition + "&response-content-type=" + *contentType
+        encodedKey := url.PathEscape(objectKey)
+        encodedContentType := url.QueryEscape(*contentType)
+        encodedDisposition := url.QueryEscape(disposition)
+
+        cloudfrontResourceURL := "https://" + endpoint + "/" + encodedKey +
+            "?response-content-disposition=" + encodedDisposition +
+            "&response-content-type=" + encodedContentType
 
         // Signed mode
         if keyPair, privKeyPath := os.Getenv("CLOUDFRONT_KEY_PAIR_ID"), os.Getenv("CLOUDFRONT_PRIVATE_KEY_PATH"); len(keyPair) != 0 && len(privKeyPath) != 0 {
-            privateKey, err := loadPEMPrivKeyFile(privKeyPath)
+            var privateKey crypto.Signer
+            // NOTE: Try PKCS#1 first
+            privateKey, err := sign.LoadPEMPrivKeyFile(privKeyPath)
+
+            // NOTE: On failure try PKCS#8
+            if err != nil && strings.Contains(err.Error(), "x509: failed to parse private key (use ParsePKCS8PrivateKey instead for this key format)") {
+                privateKey, err = loadPEMPrivKeyFile(privKeyPath)
+            }
+
             if err != nil {
                 return "", errors.New("Failed to load private key: " + err.Error())
             }
