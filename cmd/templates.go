@@ -76,20 +76,20 @@ func GlobalHelp(w io.Writer) {
 `+dim+`  Redirects media requests directly to R2/S3, bypassing your server entirely.`+reset+`
 
 `+bold+white+`USAGE`+reset+`
-  `+cyan+`OpenMediaCloud`+reset+`                        Start the proxy server
-  `+cyan+`OpenMediaCloud`+reset+` [options]              Start with options
-  `+cyan+`OpenMediaCloud`+reset+` gen <subcommand>       Generate a template file
+  `+cyan+`OpenMediaCloud`+reset+`                           Start the proxy server
+  `+cyan+`OpenMediaCloud`+reset+` [options]                 Start with options
+  `+cyan+`OpenMediaCloud`+reset+` gen <subcommand>          Generate a template file
 
 `+bold+white+`COMMANDS`+reset+`
-  `+green+bold+`gen env`+reset+`                              Print a .env template to stdout
-  `+green+bold+`gen env -o <path>`+reset+`                   Write .env template to a file
-  `+green+bold+`gen service`+reset+`                         Print a systemd service template to stdout
-  `+green+bold+`gen service -o <path>`+reset+`               Write systemd service template to a file
+  `+green+bold+`gen env`+reset+`                            Print a .env template to stdout
+  `+green+bold+`gen env -o      <path>`+reset+`             Write .env template to a file
+  `+green+bold+`gen service`+reset+`                        Print a systemd service template to stdout
+  `+green+bold+`gen service -o  <path>`+reset+`             Write systemd service template to a file
 
 `+bold+white+`OPTIONS`+reset+`
-  `+yellow+`-env`+reset+`    <path>                       Load environment variables from a custom path
-  `+yellow+`-version`+reset+`                             Show version and build info
-
+  `+yellow+FlagEnv.String()+reset+`            <path>                Load environment variables from a custom path
+  `+yellow+FlagV.String()+reset+`                         Show version and build info
+  `+yellow+FlagP.String()+reset+`      <port>                Specify a custom port to run the proxy server on
 `)
 }
 

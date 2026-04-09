@@ -1,17 +1,23 @@
 package main
 
 import (
-    "github.com/jelius-sama/OpenMediaCloud/internal/router"
-    "github.com/jelius-sama/OpenMediaCloud/internal/util"
+    "context"
+    "fmt"
     "net/http"
     "os"
+    "os/signal"
     "path/filepath"
+    "syscall"
+    "time"
+
+    "github.com/jelius-sama/OpenMediaCloud/internal/router"
+    "github.com/jelius-sama/OpenMediaCloud/internal/util"
 
     "github.com/jelius-sama/logger"
     "github.com/joho/godotenv"
 )
 
-const VERSION = "v2.0.0"
+const VERSION = "v2.1.0"
 
 var (
     // Set at compile time (use makefile)
@@ -78,9 +84,61 @@ func main() {
         defer file.Close()
     }
 
-    logger.Info("Starting server on port:", PORT)
-    if err := http.ListenAndServe(PORT, router.Router()); err != nil {
-        logger.Error("Failed to start server:", err)
+    fmt.Println("\n\033[0;36mOpenMediaCloud", VERSION, "\033[0m")
+    logger.Info("Starting server on port", PORT)
+
+    var quit chan os.Signal = make(chan os.Signal, 1)
+    signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+    var server *http.Server = &http.Server{
+        Addr:    PORT,
+        Handler: router.Router(),
+    }
+
+    go func() {
+        if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+            logger.Fatal("Failed to start server on port "+PORT+"\n", err)
+        }
+    }()
+
+    <-quit
+    var ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+
+    var deadline, _ = ctx.Deadline()
+    var done chan struct{} = make(chan struct{})
+
+    var ticker *time.Ticker = time.NewTicker(1 * time.Second)
+    defer ticker.Stop()
+
+    go func() {
+        if err := server.Shutdown(ctx); err != nil {
+            logger.TimedFatal("Server forced to shutdown:", err)
+        }
+        close(done)
+    }()
+
+    for {
+        select {
+        case <-done:
+            logger.TimedInfo("Server stopped.")
+            return
+
+        case <-ctx.Done():
+            logger.TimedInfo("Timeout reached:", ctx.Err())
+            return
+
+        case <-ticker.C:
+            if term := os.Getenv("TERM"); len(term) != 0 {
+                // Only show countdown in interactive terminals
+                var remaining int = int(time.Until(deadline).Seconds())
+                if remaining < 0 {
+                    remaining = 0
+                }
+
+                fmt.Printf("\r\033[K\033[0;36m[INFO] Shutting down in %d seconds...\033[0m", remaining)
+            }
+        }
     }
 }
 

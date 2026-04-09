@@ -5,9 +5,53 @@ import (
     "fmt"
     "os"
     "runtime"
+    "strconv"
+    "strings"
 
     "github.com/jelius-sama/logger"
 )
+
+type Flag uint8
+
+const (
+    FlagV Flag = iota
+    FlagP
+    FlagEnv
+)
+
+func (f Flag) Short() string {
+    switch f {
+    case FlagV:
+        return "v"
+    case FlagP:
+        return "p"
+    case FlagEnv:
+        return "env"
+    }
+    logger.Panic("unreachable: f.Short()")
+    return ""
+}
+
+func (f Flag) Long() string {
+    switch f {
+    case FlagV:
+        return "version"
+    case FlagP:
+        return "port"
+    case FlagEnv:
+        return "env"
+    }
+    logger.Panic("unreachable: f.Long()")
+    return ""
+}
+
+func (f Flag) String() string {
+    if f.Long() != f.Short() {
+        return "[-" + f.Long() + "|" + "-" + f.Short() + "]"
+    } else {
+        return "-" + f.Long()
+    }
+}
 
 func handleFlags() bool {
     if len(os.Args) > 1 && os.Args[1] == "gen" {
@@ -22,18 +66,44 @@ func handleFlags() bool {
         fmt.Fprintf(w, "\nFor more information, visit https://github.com/jelius-sama/OpenMediaCloud\n")
     }
 
-    CustomEnvPath = flag.String("env", "", "Load environment variables from a custom path")
-    showVersion := flag.Bool("version", false, "Show version and build info")
+    defaultPort, err := strconv.Atoi(strings.TrimPrefix(PORT, ":"))
+    if err != nil {
+        logger.Debug("Failed to get default server port:", err)
+        logger.Debug("Setting :8000 as default port")
+        defaultPort = 8000
+    }
+
+    CustomEnvPath = flag.String(FlagEnv.Long(), "", "Load environment variables from a custom path")
+
+    flag.Bool(FlagV.Long(), false, "Show version and build info")
+    flag.Bool(FlagV.Short(), false, "Show version and build info")
+
+    customPort := flag.Int(FlagP.Long(), defaultPort, "Specify a custom port to run the proxy server on")
+    customPort = flag.Int(FlagP.Short(), defaultPort, "Specify a custom port to run the proxy server on")
 
     flag.Parse()
 
-    if flag.NFlag() > 1 {
-        logger.Fatal("\r" + "Flags -env, and -version are mutually exclusive. Please use only one.")
+    isFlagPassed := func(fg Flag) bool {
+        found := false
+        flag.Visit(func(f *flag.Flag) {
+            if f.Name == fg.Long() || f.Name == fg.Short() {
+                found = true
+            }
+        })
+        return found
     }
 
-    if showVersion != nil && *showVersion == true {
+    if isFlagPassed(FlagV) && (isFlagPassed(FlagEnv) || isFlagPassed(FlagP)) {
+        logger.Fatal("\r"+"Flags", FlagEnv.String()+", "+FlagP.String()+", and "+FlagV.String(), "are mutually exclusive. Please use only one.")
+    }
+
+    if isFlagPassed(FlagV) {
         logger.Info("\r"+"OpenMediaCloud", VERSION, "\nCompiled for", runtime.GOOS, runtime.GOARCH)
         return true
+    }
+
+    if isFlagPassed(FlagP) {
+        PORT = fmt.Sprintf(":%d", *customPort)
     }
 
     return false
