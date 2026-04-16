@@ -13,6 +13,11 @@ import (
 func Router() *http.ServeMux {
     mux := http.NewServeMux()
 
+    // TODO: Identify whether the request is intended for Jellyfin, Immich, or Komga (if I plan to implement Komga).
+    // This needs to be done in a host-agnostic way, as users of this proxy can technically use any hostname.
+    // This means we may need to either work at the header level, which can potentially be tampered with, OR
+    // introduce a config that maps hostnames to specific services, allowing us to pattern match against them.
+    // NOTE: hostnames can also be tampered with, so this is not a foolproof solution either.
     mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
         jellyfinProxy, err := util.MakeReverseProxy(os.Getenv("JELLYFIN_HOST"))
         if err != nil {
