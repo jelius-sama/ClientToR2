@@ -86,10 +86,17 @@ func init() {
 // Also consider triggering a "reload" of the watchdog if
 // the watcher channel somehow gets killed.
 func (w *configWatchDogT) Start() {
-    startupConf, err := os.ReadFile(w.ActivePath)
-    if err != nil {
-        logger.Fatal("failed to read environment file\n\tFile is either deleted or something very serious is wrong.\n\tHow could we manage to read before?")
+    var prevConf []byte
+    var err error
+
+    setPrevConf := func() {
+        prevConf, err = os.ReadFile(w.ActivePath)
+        if err != nil {
+            logger.Fatal("failed to read environment file\n\tFile is either deleted or something very serious is wrong.\n\tHow could we manage to read before?")
+        }
     }
+
+    setPrevConf() // call at least once
 
     watcher, err := fsnotify.NewWatcher()
     if err != nil {
@@ -126,7 +133,7 @@ func (w *configWatchDogT) Start() {
                 }
 
                 if err = util.EnsureENV(); err != nil {
-                    envMap, err := godotenv.Parse(bytes.NewReader(startupConf))
+                    envMap, err := godotenv.Parse(bytes.NewReader(prevConf))
                     if err != nil {
                         logger.Fatal("BUG Encountered, logically this should not have happened but it still did.")
                     }
@@ -135,6 +142,7 @@ func (w *configWatchDogT) Start() {
                         os.Setenv(key, value)
                     }
                 } else {
+                    setPrevConf()
                     logger.Okay("Detected a change in environment file, successfully updated the configuration")
                 }
             }
