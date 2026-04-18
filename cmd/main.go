@@ -10,14 +10,14 @@ import (
     "syscall"
     "time"
 
-    "github.com/jelius-sama/OpenMediaCloud/internal/router"
+    "github.com/jelius-sama/OpenMediaCloud/internal/mux"
     "github.com/jelius-sama/OpenMediaCloud/internal/util"
 
     "github.com/jelius-sama/logger"
     "github.com/joho/godotenv"
 )
 
-const VERSION = "v2.1.0"
+const VERSION = "v3.0.0"
 
 var (
     // Set at compile time (use makefile)
@@ -92,7 +92,7 @@ func main() {
 
     var server *http.Server = &http.Server{
         Addr:    PORT,
-        Handler: router.Router(),
+        Handler: mux.Multiplexer(),
     }
 
     go func() {
